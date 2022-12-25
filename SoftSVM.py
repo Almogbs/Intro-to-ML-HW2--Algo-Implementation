@@ -44,13 +44,11 @@ class SoftSVM(BaseEstimator, ClassifierMixin):
         """
         margins = (X.dot(w) + b).reshape(-1, 1)
         hinge_inputs = np.multiply(margins, y.reshape(-1, 1))
+        loss = np.maximum(0, 1 - hinge_inputs)
+        loss_sum = C * np.sum(loss)
+        norm_squard = np.power(np.linalg.norm(w), 2)
 
-        norm = np.linalg.norm(w)
-
-        # TODO: complete the loss calculation
-        loss = 0.0
-
-        return
+        return norm_squard + loss_sum
 
     @staticmethod
     def subgradient(w, b: float, C: float, X, y):
@@ -64,9 +62,15 @@ class SoftSVM(BaseEstimator, ClassifierMixin):
         :param y: targets for loss computation; array of shape (n_samples,)
         :return: a tuple with (the gradient of the weights, the gradient of the bias)
         """
-        # TODO: calculate the analytical sub-gradient of soft-SVM w.r.t w and b
-        g_w = None
-        g_b = 0.0
+        margins = (X.dot(w) + b).reshape(-1, 1)
+        hinge_inputs = np.multiply(margins, y.reshape(-1, 1))
+
+        f_val = np.where(hinge_inputs < 1, -1, 0)
+        f_val_y = np.multiply(f_val, y.reshape(-1, 1))
+        f_val_yx = X.T.dot(f_val_y).reshape(-1)
+
+        g_w = np.add(np.multiply(2, w), np.multiply(C, f_val_yx))
+        g_b = C * np.sum(f_val_y)
 
         return g_w, g_b
 
@@ -101,13 +105,11 @@ class SoftSVM(BaseEstimator, ClassifierMixin):
             batch_X = X[start_idx:end_idx, :]
             batch_y = y[start_idx:end_idx]
 
-            # TODO: Compute the (sub)gradient of the current *batch*
-            g_w, g_b = None, None
+            g_w, g_b = self.subgradient(self.w, self.b, self.C, batch_X, batch_y)
 
             # Perform a (sub)gradient step
-            # TODO: update the learned parameters correctly
-            self.w = None
-            self.b = 0.0
+            self.w = self.w - (self.lr * g_w)
+            self.b = self.b - (self.lr * g_b)
 
             if keep_losses:
                 losses.append(self.loss(self.w, self.b, self.C, X, y))
@@ -136,7 +138,5 @@ class SoftSVM(BaseEstimator, ClassifierMixin):
         :return: Predicted class labels for samples in X; array of shape (n_samples,)
                  NOTE: the labels must be either +1 or -1
         """
-        # TODO: compute the predicted labels (+1 or -1)
-        y_pred = None
 
-        return y_pred
+        return np.sign(X.dot(self.w) + self.b)
